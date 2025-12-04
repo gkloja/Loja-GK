@@ -1,85 +1,66 @@
 import express from "express";
 import fetch from "node-fetch";
-import path from "path";
-import session from "express-session";
+import cookieParser from "cookie-parser";
 
 const app = express();
-
-// Sessão
-app.use(session({
-  secret: "supersegredo",
-  resave: false,
-  saveUninitialized: false
-}));
-
-// Permite POST
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser());
 
-// ----------------------
-// 1) ROTAS ORIGINAIS — NÃO PASSAM NO PROXY
-// ----------------------
-app.post("/users/login", async (req, res) => {
-  const { username, password } = req.body;
+const BASE = "http://br2.bronxyshost.com:4009"; // 🌐 seu site real
 
-  // aqui chama seu sistema ORIGINAL de login
-  // você mantém exatamente igual ao seu código
-  console.log("Login chamado pela máscara!", username);
-
-  // se login ok:
-  req.session.user = { username };
-  req.session.save(() => {
-    res.redirect("/");
-  });
-});
-
-// outras rotas reais:
-app.get("/registro", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "public", "registro.html"));
-});
-
-// ----------------------
-// 2) PROXY SOMENTE PARA ARQUIVOS /externo
-// ----------------------
-const BASE = "http://br2.bronxyshost.com:4009";
-
-app.use("/externo", async (req, res) => {
+app.use(async (req, res) => {
   try {
-    const targetUrl = BASE + req.url.replace("/externo", "");
-    const response = await fetch(targetUrl);
+    const targetUrl = BASE + req.url;
 
-    const contentType = response.headers.get("content-type");
-    if (contentType) res.setHeader("Content-Type", contentType);
+    // --- Enviar headers originais ---
+    const headers = {
+      ...req.headers,
+      host: "br2.bronxyshost.com:4009",
+      cookie: req.headers.cookie || "",
+    };
 
-    if (contentType && contentType.includes("text/html")) {
-      let html = await response.text();
+    const options = {
+      method: req.method,
+      headers,
+      redirect: "manual",
+    };
 
-      // Ajusta caminhos
-      html = html.replace(/href="\//g, 'href="/externo/');
-      html = html.replace(/src="\//g, 'src="/externo/');
-
-      res.send(html);
-      return;
+    // Enviar body em POST, PUT, PATCH etc
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      options.body = req.rawBody || JSON.stringify(req.body);
     }
 
+    // --- Faz a request para o site original ---
+    const response = await fetch(targetUrl, options);
+
+    // --- Repassar cookies para o usuário ---
+    const setCookie = response.headers.raw()["set-cookie"];
+    if (setCookie) {
+      setCookie.forEach((cookie) => {
+        res.append("Set-Cookie", cookie);
+      });
+    }
+
+    // Tipo da resposta
+    const contentType = response.headers.get("content-type");
+    if (contentType) res.set("Content-Type", contentType);
+
+    // HTML → envia direto
+    if (contentType && contentType.includes("text/html")) {
+      let html = await response.text();
+      return res.send(html);
+    }
+
+    // Outros arquivos
     const buffer = await response.buffer();
     res.send(buffer);
 
   } catch (err) {
-    res.status(500).send("Proxy erro.");
+    console.error("PROXY ERRO:", err);
+    res.status(500).send("Erro ao carregar através do proxy.");
   }
 });
 
-// ----------------------
-// 3) PUBLIC DO SITE ORIGINAL
-// ----------------------
-app.use(express.static(path.join(process.cwd(), "public")));
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "public", "index.html"));
-});
-
-// ----------------------
-app.listen(3000, () => {
-  console.log("Rodando na porta 3000");
-});
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log("Proxy rodando na porta " + port));
