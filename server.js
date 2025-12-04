@@ -8,7 +8,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// 🚫 BLOQUEAR URLs inválidas (resolves the “login() download”)
+// 🚫 Bloquear URLs inválidas
 app.use((req, res, next) => {
   if (req.url.includes("(") || req.url.includes(")")) {
     return res.status(404).send("Recurso inválido.");
@@ -17,6 +17,7 @@ app.use((req, res, next) => {
 });
 
 const BASE = "http://br2.bronxyshost.com:4009";
+const MASK = "https://fabibot.onrender.com"; // 🔴 SEU LINK DO PROXY
 
 app.use(async (req, res) => {
   try {
@@ -45,6 +46,22 @@ app.use(async (req, res) => {
 
     const response = await fetch(targetUrl, options);
 
+    // 📌 Reescrever Location de redirecionamentos
+    const location = response.headers.get("location");
+    if (location) {
+      let novaLocation = location;
+
+      if (location.startsWith("/")) {
+        novaLocation = MASK + location;
+      } else if (location.startsWith(BASE)) {
+        novaLocation = location.replace(BASE, MASK);
+      }
+
+      res.setHeader("Location", novaLocation);
+      return res.status(response.status).send();
+    }
+
+    // Repassar cookies
     const setCookie = response.headers.raw()["set-cookie"];
     if (setCookie) {
       setCookie.forEach((cookie) => res.append("Set-Cookie", cookie));
@@ -63,11 +80,9 @@ app.use(async (req, res) => {
 
   } catch (err) {
     console.error("PROXY ERRO:", err);
-    res.status(500).send("Erro ao carregar através do proxy.");
+    return res.status(500).send("Erro ao carregar através do proxy.");
   }
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () =>
-  console.log("Proxy rodando na porta " + port)
-);
+app.listen(port, () => console.log("Proxy rodando na porta " + port));
