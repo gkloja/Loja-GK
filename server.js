@@ -13,80 +13,114 @@ const MASK = "https://fabibot.onrender.com";
 
 // ===== ROTA ESPECIAL PARA /alterar-foto =====
 // Esta rota APENAS ENCAMINHA para o backend original
+
+// ===== ROTA ESPECIAL PARA /alterar-foto =====
 app.post("/alterar-foto", async (req, res) => {
   console.log("📤 Encaminhando upload para backend original...");
+  console.log("Content-Type recebido:", req.headers["content-type"]);
+  console.log("Body recebido:", req.body ? "Sim" : "Não");
   
   try {
-    // IMPORTANTE: Pegar todos os headers do cliente
+    // IMPORTANTE: Manter os cookies para sessão
     const headers = {
       "Cookie": req.headers.cookie || "",
-      "Content-Type": req.headers["content-type"] || "application/json",
       "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
-      "Accept": "application/json",
-      "X-Forwarded-For": req.ip,
-      "X-Real-IP": req.ip
+      "Accept": "application/json"
     };
     
-    // Se for JSON (com fotoUrl) - encaminhar como está
-    if (req.headers["content-type"]?.includes("application/json")) {
-      console.log("📨 Encaminhando JSON para backend original");
+    // SEMPRE enviar como multipart/form-data para o backend original
+    // pois ele espera upload.single('fotoFile')
+    
+    // Criar FormData programaticamente
+    const FormData = (await import('form-data')).default;
+    const form = new FormData();
+    
+    // Se veio base64 (da máscara)
+    if (req.body && req.body.fotoUrl) {
+      console.log("📸 Convertendo base64 para arquivo...");
       
-      const backendResponse = await fetch(BASE + "/alterar-foto", {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(req.body)
-      });
+      // Extrair tipo MIME e dados da base64
+      const base64Data = req.body.fotoUrl;
+      const matches = base64Data.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
       
-      // Copiar resposta
-      const data = await backendResponse.json();
-      const setCookie = backendResponse.headers.raw()["set-cookie"];
-      
-      if (setCookie) {
-        setCookie.forEach(cookie => {
-          res.append("Set-Cookie", cookie);
+      if (matches && matches.length === 3) {
+        const mimeType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        const extension = mimeType.split('/')[1] || 'jpg';
+        const filename = req.body.filename || `foto-${Date.now()}.${extension}`;
+        
+        // Adicionar ao FormData como arquivo
+        form.append('fotoFile', buffer, {
+          filename: filename,
+          contentType: mimeType
         });
+        
+        console.log(`📁 Arquivo criado: ${filename} (${buffer.length} bytes)`);
+      } else {
+        // Se não for base64 válido, tratar como URL
+        console.log("📡 Tratando como URL normal...");
+        form.append('fotoUrl', base64Data);
       }
-      
-      console.log(`📥 Resposta do backend original: ${data.sucesso ? '✅' : '❌'}`);
-      res.status(backendResponse.status).json(data);
-      
-    } 
-    // Se for multipart/form-data (arquivo) - precisa tratar diferente
-    else if (req.headers["content-type"]?.includes("multipart/form-data")) {
-      console.log("⚠️ Multipart recebido - encaminhando para backend...");
-      
-      // Para multipart, precisamos reenviar o stream
-      const backendResponse = await fetch(BASE + "/alterar-foto", {
-        method: "POST",
-        headers: {
-          "Cookie": req.headers.cookie || "",
-          "User-Agent": req.headers["user-agent"] || "Mozilla/5.0"
-          // NÃO definir Content-Type para multipart - fetch faz automaticamente
-        },
-        body: req // Passar a requisição original
-      });
-      
-      const data = await backendResponse.json();
-      const setCookie = backendResponse.headers.raw()["set-cookie"];
-      
-      if (setCookie) {
-        setCookie.forEach(cookie => {
-          res.append("Set-Cookie", cookie);
-        });
-      }
-      
-      res.status(backendResponse.status).json(data);
     }
     
+    // Se veio como multipart (upload direto)
+    else if (req.headers["content-type"]?.includes("multipart/form-data")) {
+      console.log("📎 Multipart recebido - repassando...");
+      // Aqui você precisaria processar o multipart recebido
+      // Mas como seu frontend envia JSON, isso provavelmente não será usado
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Upload direto de arquivo não suportado pela máscara"
+      });
+    }
+    
+    // Se não tem foto
+    else {
+      console.log("❌ Nenhuma foto fornecida");
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Nenhuma foto fornecida!"
+      });
+    }
+    
+    // ENVIAR PARA O BACKEND ORIGINAL
+    console.log("🚀 Enviando para backend original...");
+    
+    // Adicionar cabeçalhos do FormData
+    const formHeaders = {
+      ...headers,
+      ...form.getHeaders()
+    };
+    
+    const backendResponse = await fetch(BASE + "/alterar-foto", {
+      method: "POST",
+      headers: formHeaders,
+      body: form
+    });
+    
+    // Processar resposta
+    const data = await backendResponse.json();
+    console.log("📥 Resposta do backend:", data.sucesso ? '✅' : '❌');
+    
+    // Copiar cookies de sessão
+    const setCookie = backendResponse.headers.raw()["set-cookie"];
+    if (setCookie) {
+      setCookie.forEach(cookie => {
+        res.append("Set-Cookie", cookie);
+      });
+    }
+    
+    // Retornar resposta ao cliente
+    res.status(backendResponse.status).json(data);
+    
   } catch (error) {
-    console.error("❌ Erro ao encaminhar para backend:", error);
-    res.status(500).json({ 
-      sucesso: false, 
-      mensagem: "Erro ao conectar com o servidor" 
+    console.error("❌ Erro ao processar upload:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao processar foto: " + error.message
     });
   }
 });
-
 // ===== ROTA PARA API DE MÚSICAS =====
 app.post("/play", async (req, res) => {
   try {
