@@ -8,81 +8,73 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// 🚫 Bloquear URLs inválidas
-app.use((req, res, next) => {
-  if (req.url.includes("(") || req.url.includes(")")) {
-    return res.status(404).send("Recurso inválido.");
-  }
-  next();
-});
-
 const BASE = "http://br2.bronxyshost.com:4009";
-const MASK = "https://fabibot.onrender.com"; // 🔴 SEU LINK DO PROXY
+const MASK = "https://fabibot.onrender.com";
 
 app.use(async (req, res) => {
   try {
     const targetUrl = BASE + req.url;
 
-    const headers = {
-      ...req.headers,
-      host: "br2.bronxyshost.com:4009",
-      cookie: req.headers.cookie || "",
-    };
+    // 🔧 Limpar headers proibidos
+    const newHeaders = { ...req.headers };
+    delete newHeaders["content-length"];
+    delete newHeaders["host"];
+    delete newHeaders["connection"];
 
-    const options = {
-      method: req.method,
-      headers,
-      redirect: "manual",
-    };
+    // 🔧 Preparar o corpo
+    let body = undefined;
 
-    if (!["GET", "HEAD"].includes(req.method)) {
-      if (req.is("application/json")) {
-        options.body = JSON.stringify(req.body);
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      const ct = req.headers["content-type"] || "";
+
+      if (ct.includes("application/json")) {
+        body = JSON.stringify(req.body);
+        newHeaders["Content-Type"] = "application/json";
       } else {
-        options.body = new URLSearchParams(req.body).toString();
-        headers["Content-Type"] = "application/x-www-form-urlencoded";
+        body = new URLSearchParams(req.body).toString();
+        newHeaders["Content-Type"] =
+          "application/x-www-form-urlencoded;charset=UTF-8";
       }
     }
 
-    const response = await fetch(targetUrl, options);
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: newHeaders,
+      body,
+      redirect: "manual",
+    });
 
-    // 📌 Reescrever Location de redirecionamentos
-    const location = response.headers.get("location");
-    if (location) {
-      let novaLocation = location;
+    // 📌 Reescrever redirecionamentos
+    const loc = response.headers.get("location");
+    if (loc) {
+      let redirectTo = loc;
 
-      if (location.startsWith("/")) {
-        novaLocation = MASK + location;
-      } else if (location.startsWith(BASE)) {
-        novaLocation = location.replace(BASE, MASK);
-      }
+      if (redirectTo.startsWith("/")) redirectTo = MASK + redirectTo;
+      else redirectTo = redirectTo.replace(BASE, MASK);
 
-      res.setHeader("Location", novaLocation);
+      res.setHeader("Location", redirectTo);
       return res.status(response.status).send();
     }
 
-    // Repassar cookies
+    // 🔄 Cookies
     const setCookie = response.headers.raw()["set-cookie"];
-    if (setCookie) {
-      setCookie.forEach((cookie) => res.append("Set-Cookie", cookie));
+    if (setCookie) setCookie.forEach((c) => res.append("Set-Cookie", c));
+
+    // Tipo
+    const type = response.headers.get("content-type");
+    if (type) res.setHeader("Content-Type", type);
+
+    // HTML → texto
+    if (type && type.includes("text/html")) {
+      return res.send(await response.text());
     }
 
-    const contentType = response.headers.get("content-type");
-    if (contentType) res.setHeader("Content-Type", contentType);
-
-    if (contentType && contentType.includes("text/html")) {
-      const html = await response.text();
-      return res.send(html);
-    }
-
-    const buffer = await response.buffer();
-    return res.send(buffer);
-
-  } catch (err) {
-    console.error("PROXY ERRO:", err);
-    return res.status(500).send("Erro ao carregar através do proxy.");
+    // Outros → buffer
+    return res.send(await response.buffer());
+  } catch (e) {
+    console.error("PROXY ERROR:", e);
+    res.status(500).send("Erro no proxy.");
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log("Proxy rodando na porta " + port));
+app.listen(process.env.PORT || 3000);
