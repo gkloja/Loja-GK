@@ -50,7 +50,7 @@ app.get("/google-verification.html", (req, res) => {
 <html>
 <head>
     <title>Google Verification</title>
-    <meta name="google-site-verification" content="ABCdEfGhIjKlMnOpQrStUvWxYz1234567890" />
+    <meta name="google-site-verification" content="EQt18dIllZg0WnhSV58os4awAy0jsyxrLL3Yek09dYo" />
 </head>
 <body>
     <h1>Google Search Console Verification</h1>
