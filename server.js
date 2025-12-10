@@ -1,978 +1,125 @@
 import express from "express";
+import cors from "cors";
+import path from "path";
+import rateLimit from "express-rate-limit";
+import useragent from "express-useragent";
+import bodyParser from "body-parser";
 import fetch from "node-fetch";
-import cookieParser from "cookie-parser";
 
 const app = express();
 
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
-app.use(express.json({ limit: '20mb' }));
-app.use(cookieParser());
-
-const BASE = "http://br2.bronxyshost.com:4009";
+// ================================
+// CONFIGURAÇÕES
+// ================================
+const PORT = process.env.PORT || 3000;
 const MASK = "https://fabibot.onrender.com";
+const BASE = "http://br2.bronxyshost.com:4009";
 
-// ========== CONFIGURAÇÃO SEO COMPLETA ==========
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(body) {
-    if (typeof body === 'string' && body.includes('</head>')) {
-      const verificationCode = '<meta name="google-site-verification" content="ABCdEfGhIjKlMnOpQrStUvWxYz1234567890" />';
-      body = body.replace('</head>', verificationCode + '\n</head>');
-    }
-    originalSend.call(this, body);
-  };
-  next();
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(useragent.express());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// ================================
+// RATE LIMIT
+// ================================
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  message: "Muitas requisições, tente mais tarde."
 });
+app.use(apiLimiter);
 
-app.get("/google-verification.html", (req, res) => {
+// ================================
+// SEO
+// ================================
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
   res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Google Verification</title>
-    <meta name="google-site-verification" content="EQt18dIllZg0WnhSV58os4awAy0jsyxrLL3Yek09dYo" />
-</head>
-<body>
-    <h1>Google Search Console Verification</h1>
-    <p>Site: https://fabibot.onrender.com</p>
-</body>
-</html>
+User-agent: *
+Allow: /
+
+Sitemap: ${MASK}/sitemap.xml
   `);
 });
 
-// 1. Robots.txt
-app.get("/robots.txt", (req, res) => {
-  res.type('text/plain');
-  res.send(`User-agent: *
-Allow: /
-Disallow: /admin/
-Disallow: /private/
-
-Sitemap: https://fabibot.onrender.com/sitemap.xml
-
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Slurp
-Allow: /
-
-# Block AI scrapers
-User-agent: ChatGPT-User
-Disallow: /
-User-agent: GPTBot
-Disallow: /
-User-agent: CCBot
-Disallow: /`);
-});
-
-// 2. Sitemap.xml
 app.get("/sitemap.xml", (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  res.type('application/xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
-        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
-  
-  <!-- PÁGINA PRINCIPAL (SEMPRE EXISTE) -->
+  res.type("application/xml");
+  res.send(`
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://fabibot.onrender.com/</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>daily</changefreq>
+    <loc>${MASK}/</loc>
+    <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
-  
-  <!-- LOGIN (QUASE SEMPRE EXISTE) -->
   <url>
-    <loc>https://fabibot.onrender.com/login</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  
-  <!-- CADASTRO (QUASE SEMPRE EXISTE) -->
-  <url>
-    <loc>https://fabibot.onrender.com/register</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  
-  <!-- CHAT (SE TIVER NO SEU SITE) -->
-  <url>
-    <loc>https://fabibot.onrender.com/chat</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>always</changefreq>
-    <priority>0.9</priority>
-  </url>
-  
-  <!-- STREAM PRO -->
-  <url>
-    <loc>https://fabibot.onrender.com/reprodutor</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  
-  <!-- ALTERNATIVA PARA PERFIL -->
-  <url>
-    <loc>https://fabibot.onrender.com/corrida</loc>
-    <lastmod>2024-12-07</lastmod>
+    <loc>${MASK}/assistir</loc>
     <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  
-  <url>
-    <loc>https://fabibot.onrender.com/removermarca</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
-  
-  <!-- PÁGINAS INSTITUCIONAIS -->
-  <url>
-    <loc>https://fabibot.onrender.com/about</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://fabibot.onrender.com/sobre</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://fabibot.onrender.com/privacy</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  
-  <url>
-    <loc>https://fabibot.onrender.com/terms</loc>
-    <lastmod>2024-12-07</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-</urlset>`);
+</urlset>
+  `);
 });
 
-// 3. Página SOBRE
-app.get("/sobre", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sobre o FabiBot - Plataforma Completa de Entretenimento Online</title>
-    <meta name="description" content="Conheça o FabiBot: chat online grátis, player de músicas, jogos e ranking. A maior comunidade brasileira de entretenimento digital.">
-    <meta name="keywords" content="FabiBot, sobre, chat online, músicas, jogos, entretenimento">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { 
-            max-width: 1000px; 
-            margin: 0 auto; 
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        h1 { 
-            color: #fff; 
-            font-size: 2.5em; 
-            margin-bottom: 30px;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        h2 { 
-            color: #ffd700; 
-            margin: 25px 0 15px;
-            border-left: 4px solid #ffd700;
-            padding-left: 15px;
-        }
-        p { 
-            line-height: 1.8; 
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin: 30px 0;
-        }
-        .feature-card {
-            background: rgba(255,255,255,0.15);
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        .feature-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255,255,255,0.2);
-        }
-        .feature-icon {
-            font-size: 2.5em;
-            margin-bottom: 15px;
-            display: block;
-        }
-        .btn {
-            display: inline-block;
-            background: #ffd700;
-            color: #333;
-            padding: 12px 30px;
-            border-radius: 50px;
-            text-decoration: none;
-            font-weight: bold;
-            margin-top: 20px;
-            transition: all 0.3s;
-        }
-        .btn:hover {
-            background: #ffed4e;
-            transform: scale(1.05);
-        }
-        .back-link {
-            display: block;
-            text-align: center;
-            margin-top: 40px;
-            color: #ffd700;
-            text-decoration: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎮 Sobre o FabiBot</h1>
-        
-        <p>Bem-vindo ao <strong>FabiBot</strong>, a plataforma de entretenimento online mais completa do Brasil! Criada para conectar pessoas através da diversão digital.</p>
-        
-        <h2>✨ O Que Oferecemos</h2>
-        
-        <div class="features-grid">
-            <div class="feature-card">
-                <span class="feature-icon">💬</span>
-                <h3>Chat Online</h3>
-                <p>Converse em tempo real com amigos em salas temáticas. Totalmente gratuito e sem limites!</p>
-            </div>
-            
-            <div class="feature-card">
-                <span class="feature-icon">🎵</span>
-                <h3>Player de Músicas</h3>
-                <p>Ouça milhares de músicas com nosso player avançado. Crie playlists e descubra novas faixas.</p>
-            </div>
-            
-            <div class="feature-card">
-                <span class="feature-icon">🏆</span>
-                <h3>Sistema de Ranking</h3>
-                <p>Participe, acumule pontos e suba no ranking. Mostre quem é o melhor da comunidade!</p>
-            </div>
-            
-            <div class="feature-card">
-                <span class="feature-icon">🎲</span>
-                <h3>Jogos Online</h3>
-                <p>Diversos jogos para se divertir sozinho ou com amigos. Novos jogos adicionados toda semana!</p>
-            </div>
-        </div>
-        
-        <h2>🚀 Nossa Missão</h2>
-        <p>Proporcionar entretenimento de qualidade, gratuito e acessível para todos os brasileiros. Acreditamos que a diversão deve ser democrática!</p>
-        
-        <h2>📈 Estatísticas Impressionantes</h2>
-        <p>• <strong>+10,000 usuários ativos</strong><br>
-           • <strong>+50,000 mensagens diárias</strong><br>
-           • <strong>+100,000 músicas tocadas</strong><br>
-           • <strong>99.9% uptime</strong></p>
-        
-        <h2>🔒 Segurança e Privacidade</h2>
-        <p>Seus dados estão seguros conosco. Utilizamos criptografia de ponta a ponta e não vendemos suas informações.</p>
-        
-        <div style="text-align: center;">
-            <a href="/" class="btn">🎯 Experimente Grátis</a>
-        </div>
-        
-        <a href="/" class="back-link">← Voltar para o FabiBot</a>
-    </div>
-</body>
-</html>`);
+// ================================
+// PÁGINAS FIXAS
+// ================================
+app.get("/", (req, res) => {
+  res.send(`<h1>FabiBot Online</h1><p>Servidor ativo com máscara Render.</p>`);
 });
 
-// 4. Página POLÍTICA DE PRIVACIDADE
-app.get("/politica-de-privacidade", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Política de Privacidade - FabiBot</title>
-    <meta name="description" content="Política de Privacidade do FabiBot. Saiba como protegemos seus dados e informações pessoais.">
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.8; }
-        h1, h2 { color: #667eea; }
-        .date { color: #666; font-style: italic; }
-    </style>
-</head>
-<body>
-    <h1>🔒 Política de Privacidade do FabiBot</h1>
-    <p class="date">Última atualização: 06 de dezembro de 2024</p>
-    
-    <h2>1. Coleta de Informações</h2>
-    <p>Coletamos informações para fornecer e melhorar nossos serviços...</p>
-    
-    <h2>2. Uso de Dados</h2>
-    <p>Utilizamos seus dados para personalizar sua experiência...</p>
-    
-    <h2>3. Cookies</h2>
-    <p>Utilizamos cookies para melhorar a navegação...</p>
-    
-    <h2>4. Google AdSense</h2>
-    <p>Terceiros, incluindo o Google, usam cookies para veicular anúncios...</p>
-    
-    <p><a href="/">← Voltar ao FabiBot</a></p>
-</body>
-</html>`);
+app.get("/assistir", (req, res) => {
+  res.send(`<h1>Player carregado</h1><p>Use POST /assistir para tocar canais.</p>`);
 });
 
-// 5. Página TERMOS DE USO
-app.get("/termos-de-uso", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Termos de Uso - FabiBot</title>
-    <meta name="description" content="Termos e Condições de Uso do FabiBot. Leia atentamente antes de utilizar nossa plataforma.">
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.8; }
-        h1, h2 { color: #667eea; }
-    </style>
-</head>
-<body>
-    <h1>📄 Termos de Uso do FabiBot</h1>
-    
-    <h2>1. Aceitação dos Termos</h2>
-    <p>Ao acessar o FabiBot, você concorda com estes termos...</p>
-    
-    <h2>2. Uso Adequado</h2>
-    <p>Você concorda em não usar o serviço para atividades ilegais...</p>
-    
-    <h2>3. Contas de Usuário</h2>
-    <p>Você é responsável por manter sua conta segura...</p>
-    
-    <p><a href="/">← Voltar ao FabiBot</a></p>
-</body>
-</html>`);
-});
-
-// 6. Página AJUDA/FAQ
-app.get("/ajuda", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ajuda do FabiBot - Perguntas Frequentes</title>
-    <meta name="description" content="Central de Ajuda do FabiBot. Tire todas suas dúvidas sobre chat, músicas, jogos e mais.">
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-        .faq-item { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        .question { color: #667eea; font-weight: bold; cursor: pointer; }
-        .answer { display: none; margin-top: 10px; }
-    </style>
-</head>
-<body>
-    <h1>❓ Central de Ajuda - FabiBot</h1>
-    
-    <div class="faq-item">
-        <div class="question" onclick="toggleAnswer(this)">Como usar o chat online?</div>
-        <div class="answer">Basta acessar a aba "Chat" e escolher uma sala...</div>
-    </div>
-    
-    <div class="faq-item">
-        <div class="question" onclick="toggleAnswer(this)">O player de músicas é gratuito?</div>
-        <div class="answer">Sim, totalmente gratuito e sem anúncios...</div>
-    </div>
-    
-    <script>
-        function toggleAnswer(element) {
-            const answer = element.nextElementSibling;
-            answer.style.display = answer.style.display === 'block' ? 'none' : 'block';
-        }
-    </script>
-    
-    <p><a href="/">← Voltar ao FabiBot</a></p>
-</body>
-</html>`);
-});
-
-// ===== ROTAS PARA O STREAM PRO =====
-
-// Rota principal do reprodutor
-app.get('/reprodutor', async (req, res) => {
+// ================================
+// PROXY UNIVERSAL - CORAÇÃO DA MÁSCARA
+// ================================
+app.use(async (req, res) => {
   try {
-    const targetUrl = BASE + '/reprodutor';
-    
-    console.log(`🎬 Acessando reprodutor: ${targetUrl}`);
-    
-    const response = await fetch(targetUrl, {
-      method: 'GET',
+    const destino = BASE + req.originalUrl;
+
+    console.log("Proxy →", destino);
+
+    const proxied = await fetch(destino, {
+      method: req.method,
       headers: {
-        'Cookie': req.headers.cookie || '',
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      }
+        ...req.headers,
+        host: "br2.bronxyshost.com",
+        origin: BASE,
+        referer: BASE
+      },
+      body:
+        ["GET", "HEAD"].includes(req.method)
+          ? null
+          : req.is("application/json")
+            ? JSON.stringify(req.body)
+            : req.body,
+      signal: AbortSignal.timeout(0) // sem timeout do render
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+    // Copiar headers do servidor original
+    proxied.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
 
-    // Corrigir HTML para apontar para a máscara
-    let html = await response.text();
-    
-    // Substituir todas as referências para o backend original
-    html = html.replace(new RegExp(BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), MASK);
-    
-    // Corrigir caminhos relativos para API
-    html = html.replace(/\/api\/streampro\//g, `${MASK}/api/streampro/`);
-    
-    // Corrigir URLs de assets
-    html = html.replace(/src="\/(?!\/)/g, `src="${MASK}/`);
-    html = html.replace(/href="\/(?!\/)/g, `href="${MASK}/`);
-    
-    // Copiar cookies de sessão
-    const setCookie = response.headers.raw()['set-cookie'];
-    if (setCookie) {
-      setCookie.forEach(cookie => {
-        res.append('Set-Cookie', cookie);
-      });
-    }
-    
-    // Enviar HTML modificado
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
-    
-  } catch (error) {
-    console.error('❌ Erro ao acessar reprodutor:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Erro - Stream Pro</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-          h1 { color: #ff3333; }
-          a { color: #667eea; text-decoration: none; }
-        </style>
-      </head>
-      <body>
-        <h1>⚠️ Erro ao carregar o Stream Pro</h1>
-        <p>${error.message}</p>
-        <p><a href="/">Voltar para a página inicial</a></p>
-      </body>
-      </html>
+    // Stream direto (importante para IPTV)
+    return proxied.body.pipe(res);
+
+  } catch (err) {
+    console.error("Erro no proxy:", err);
+
+    res.status(503).send(`
+      <h1>503 - Serviço Temporariamente Indisponível</h1>
+      <p>Não foi possível conectar ao servidor principal.</p>
     `);
   }
 });
 
-// Rota para a página do Stream Pro (alternativa)
-app.get('/streampro', (req, res) => {
-  res.redirect('/reprodutor');
-});
-
-// ===== API DO STREAM PRO =====
-
-// Middleware para todas as rotas API do Stream Pro
-app.use('/api/streampro/:path*', async (req, res) => {
-  try {
-    const path = req.params.path;
-    const fullPath = req.params[0] ? `${path}${req.params[0]}` : path;
-    const targetUrl = `${BASE}/api/streampro/${fullPath}`;
-    
-    console.log(`🎬 Stream Pro API: ${req.method} ${targetUrl}`);
-    
-    // Preparar headers
-    const headers = {
-      'Cookie': req.headers.cookie || '',
-      'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-      'Accept': 'application/json, */*',
-      'Origin': BASE,
-      'Referer': `${BASE}/reprodutor`,
-      'Content-Type': req.headers['content-type'] || 'application/json'
-    };
-    
-    // Configurar opções da requisição
-    const options = {
-      method: req.method,
-      headers: headers,
-      timeout: 30000
-    };
-    
-    // Adicionar body se existir
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      if (req.body) {
-        if (req.headers['content-type']?.includes('application/json')) {
-          options.body = JSON.stringify(req.body);
-        } else if (req.headers['content-type']?.includes('multipart/form-data')) {
-          // Para uploads, repassar o stream
-          options.body = req;
-          delete headers['Content-Type'];
-        } else {
-          options.body = JSON.stringify(req.body);
-        }
-      }
-    }
-    
-    // Adicionar query parameters
-    const queryString = new URLSearchParams(req.query).toString();
-    const urlWithQuery = queryString ? `${targetUrl}?${queryString}` : targetUrl;
-    
-    console.log(`📡 Fazendo requisição para: ${urlWithQuery}`);
-    
-    const response = await fetch(urlWithQuery, options);
-    
-    // Copiar cookies de sessão
-    const setCookie = response.headers.raw()['set-cookie'];
-    if (setCookie) {
-      setCookie.forEach(cookie => {
-        res.append('Set-Cookie', cookie);
-      });
-    }
-    
-    // Determinar tipo de conteúdo
-    const contentType = response.headers.get('content-type');
-    
-    if (contentType?.includes('application/json')) {
-      const data = await response.json();
-      res.status(response.status).json(data);
-    } else if (contentType?.includes('audio/x-mpegurl')) {
-      // Para exportação M3U
-      const filename = response.headers.get('content-disposition') || 
-                      `streampro-${Date.now()}.m3u`;
-      res.set('Content-Type', 'audio/x-mpegurl');
-      res.set('Content-Disposition', filename);
-      res.send(await response.text());
-    } else if (contentType?.includes('text/')) {
-      res.set('Content-Type', contentType);
-      res.send(await response.text());
-    } else {
-      // Para streams de vídeo/proxy
-      response.headers.forEach((value, name) => {
-        if (!['content-encoding', 'transfer-encoding'].includes(name.toLowerCase())) {
-          res.set(name, value);
-        }
-      });
-      
-      // Configurar CORS para streaming
-      res.set('Access-Control-Allow-Origin', '*');
-      res.set('Access-Control-Allow-Headers', '*');
-      res.set('Access-Control-Expose-Headers', '*');
-      
-      // Pipe da resposta
-      response.body.pipe(res);
-    }
-    
-  } catch (error) {
-    console.error('❌ Erro na API Stream Pro:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro na API do Stream Pro',
-      message: error.message,
-      code: 'STREAM_PRO_API_ERROR'
-    });
-  }
-});
-
-// Rota especial para proxy de stream
-app.get('/stream-proxy', async (req, res) => {
-  const { url, agente } = req.query;
-  
-  if (!url) {
-    return res.status(400).json({ error: 'URL requerida' });
-  }
-  
-  try {
-    console.log(`📺 Proxy de stream: ${url}`);
-    
-    const targetUrl = `${BASE}/api/streampro/proxy?url=${encodeURIComponent(url)}&agente=${agente || 'vlc'}`;
-    
-    const response = await fetch(targetUrl, {
-      headers: {
-        'Cookie': req.headers.cookie || '',
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-        'Range': req.headers.range || 'bytes=0-',
-        'Accept': '*/*',
-        'Origin': BASE
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    // Copiar headers importantes para streaming
-    const headersToCopy = [
-      'content-type', 'content-length', 'content-range',
-      'accept-ranges', 'cache-control', 'expires',
-      'last-modified', 'etag'
-    ];
-    
-    headersToCopy.forEach(header => {
-      const value = response.headers.get(header);
-      if (value) res.set(header, value);
-    });
-    
-    // Permitir CORS
-    res.set('Access-Control-Allow-Origin', '*');
-    res.set('Access-Control-Allow-Headers', '*');
-    res.set('Access-Control-Expose-Headers', '*');
-    
-    // Stream dos dados
-    response.body.pipe(res);
-    
-  } catch (error) {
-    console.error('❌ Erro no proxy de stream:', error);
-    res.status(500).json({ 
-      error: 'Erro no proxy de stream',
-      message: error.message 
-    });
-  }
-});
-
-// ===== ROTA ESPECIAL PARA /alterar-foto =====
-app.post("/alterar-foto", async (req, res) => {
-  console.log("📤 Encaminhando upload para backend original...");
-  
-  try {
-    const headers = {
-      "Cookie": req.headers.cookie || "",
-      "User-Agent": req.headers["user-agent"] || "Mozilla/5.0",
-      "Accept": "application/json"
-    };
-    
-    const FormData = (await import('form-data')).default;
-    const form = new FormData();
-    
-    if (req.body && req.body.fotoUrl) {
-      console.log("📸 Convertendo base64 para arquivo...");
-      
-      const base64Data = req.body.fotoUrl;
-      const matches = base64Data.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-      
-      if (matches && matches.length === 3) {
-        const mimeType = matches[1];
-        const buffer = Buffer.from(matches[2], 'base64');
-        const extension = mimeType.split('/')[1] || 'jpg';
-        const filename = req.body.filename || `foto-${Date.now()}.${extension}`;
-        
-        form.append('fotoFile', buffer, {
-          filename: filename,
-          contentType: mimeType
-        });
-      } else {
-        form.append('fotoUrl', base64Data);
-      }
-    } else {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: "Nenhuma foto fornecida!"
-      });
-    }
-    
-    const formHeaders = {
-      ...headers,
-      ...form.getHeaders()
-    };
-    
-    const backendResponse = await fetch(BASE + "/alterar-foto", {
-      method: "POST",
-      headers: formHeaders,
-      body: form
-    });
-    
-    const data = await backendResponse.json();
-    
-    const setCookie = backendResponse.headers.raw()["set-cookie"];
-    if (setCookie) {
-      setCookie.forEach(cookie => {
-        res.append("Set-Cookie", cookie);
-      });
-    }
-    
-    res.status(backendResponse.status).json(data);
-    
-  } catch (error) {
-    console.error("❌ Erro ao processar upload:", error);
-    res.status(500).json({
-      sucesso: false,
-      mensagem: "Erro ao processar foto: " + error.message
-    });
-  }
-});
-
-// ===== ROTA PARA API DE MÚSICAS =====
-app.post("/play", async (req, res) => {
-  try {
-    const backendResponse = await fetch(BASE + "/play", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "Samá-Music-Player/1.0",
-        "Cookie": req.headers.cookie || ""
-      },
-      body: JSON.stringify(req.body)
-    });
-
-    const data = await backendResponse.json();
-    
-    const setCookie = backendResponse.headers.raw()["set-cookie"];
-    if (setCookie) {
-      setCookie.forEach(cookie => {
-        res.append("Set-Cookie", cookie);
-      });
-    }
-    
-    res.status(backendResponse.status).json(data);
-    
-  } catch (error) {
-    console.error("Music API error:", error);
-    res.status(500).json({ error: "Falha na API de músicas" });
-  }
-});
-
-// ===== MIDDLEWARE PARA OUTRAS ROTAS (PROXY GERAL) =====
-app.use(async (req, res) => {
-  try {
-    // Lista de rotas já tratadas
-    const rotasTratadas = [
-      '/alterar-foto',
-      '/play',
-      '/reprodutor',
-      '/streampro',
-      '/api/streampro',
-      '/stream-proxy',
-      '/sobre',
-      '/politica-de-privacidade',
-      '/termos-de-uso',
-      '/ajuda',
-      '/robots.txt',
-      '/sitemap.xml',
-      '/google-verification.html'
-    ];
-    
-    // Verificar se a rota já foi tratada
-    for (const rota of rotasTratadas) {
-      if (req.path.startsWith(rota)) {
-        return res.status(404).send("Rota já tratada");
-      }
-    }
-
-    const targetUrl = BASE + req.url;
-    console.log(`🔗 Proxy geral: ${req.method} ${req.path}`);
-
-    // Preparar headers
-    const headers = { 
-      ...req.headers,
-      "host": new URL(BASE).host,
-      "origin": BASE,
-      "referer": BASE + "/",
-      "x-forwarded-for": req.ip,
-      "x-real-ip": req.ip
-    };
-    
-    delete headers["content-length"];
-
-    let body;
-    const contentType = req.headers["content-type"] || "";
-
-    // Preparar body
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      if (contentType.includes("application/json")) {
-        body = JSON.stringify(req.body);
-        headers["Content-Type"] = "application/json";
-      } else if (contentType.includes("multipart/form-data")) {
-        body = req;
-        delete headers["content-type"];
-      } else {
-        body = new URLSearchParams(req.body).toString();
-        headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
-      }
-    }
-
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers: headers,
-      body: body,
-      redirect: "manual",
-    });
-
-    // Tratar redirecionamentos
-    const location = response.headers.get("location");
-    if (location) {
-      let redirectUrl = location;
-      if (redirectUrl.startsWith("/")) {
-        redirectUrl = MASK + redirectUrl;
-      } else if (redirectUrl.startsWith(BASE)) {
-        redirectUrl = redirectUrl.replace(BASE, MASK);
-      }
-      res.setHeader("Location", redirectUrl);
-      return res.status(response.status).end();
-    }
-
-    // Copiar cookies
-    const cookies = response.headers.raw()["set-cookie"];
-    if (cookies) {
-      cookies.forEach(cookie => {
-        res.append("Set-Cookie", cookie);
-      });
-    }
-
-    // Copiar outros headers
-    const type = response.headers.get("content-type");
-    if (type) res.setHeader("Content-Type", type);
-
-    // Enviar resposta
-    if (type && type.includes("text/html")) {
-      let html = await response.text();
-      // Corrigir URLs no HTML
-      html = html.replace(new RegExp(BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), MASK);
-      res.send(html);
-    } else {
-      const buffer = await response.buffer();
-      res.send(buffer);
-    }
-    
-  } catch (error) {
-    console.error("Proxy error:", error);
-    res.status(500).send("Erro no proxy");
-  }
-});
-
-const PORT = process.env.PORT || 3000;
+// ================================
+// START
+// ================================
 app.listen(PORT, () => {
-  console.log(`
-  🚀 Máscara rodando na porta ${PORT}
-  🔗 Encaminhando para: ${BASE}
-  🎭 URL da máscara: ${MASK}
-  ✅ Stream Pro integrado e funcionando!
-  `);
-});
-
-// Script de correção para o frontend
-app.get('/streampro-fix.js', (req, res) => {
-  res.set('Content-Type', 'application/javascript');
-  res.send(`
-// Correções para o Stream Pro funcionar na máscara
-(function() {
-  'use strict';
-  
-  const MASK_URL = 'https://fabibot.onrender.com';
-  const BASE_URL = 'http://br2.bronxyshost.com:4009';
-  
-  // Sobrescrever fetch para corrigir URLs
-  const originalFetch = window.fetch;
-  window.fetch = function(url, options = {}) {
-    if (typeof url === 'string') {
-      // Corrigir URLs da API do Stream Pro
-      if (url.includes('/api/streampro/')) {
-        url = url.replace(BASE_URL, MASK_URL);
-        if (url.startsWith('/api/streampro/')) {
-          url = MASK_URL + url;
-        }
-      }
-      
-      // Corrigir URLs do proxy
-      if (url.includes('/api/streampro/proxy')) {
-        url = url.replace(BASE_URL, MASK_URL);
-      }
-      
-      // Corrigir outras URLs do backend
-      if (url.startsWith(BASE_URL)) {
-        url = url.replace(BASE_URL, MASK_URL);
-      }
-    }
-    
-    // Garantir que cookies sejam enviados
-    if (!options.credentials) {
-      options.credentials = 'include';
-    }
-    
-    // Garantir headers CORS
-    if (!options.headers) {
-      options.headers = {};
-    }
-    options.headers['Accept'] = 'application/json, */*';
-    
-    return originalFetch.call(this, url, options);
-  };
-  
-  // Correção para XMLHttpRequest
-  const originalXHROpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-    if (typeof url === 'string') {
-      if (url.includes('/api/streampro/')) {
-        url = url.replace(BASE_URL, MASK_URL);
-        if (url.startsWith('/api/streampro/')) {
-          url = MASK_URL + url;
-        }
-      }
-      
-      if (url.startsWith(BASE_URL)) {
-        url = url.replace(BASE_URL, MASK_URL);
-      }
-    }
-    return originalXHROpen.call(this, method, url, async, user, password);
-  };
-  
-  // Correção para elementos de mídia
-  document.addEventListener('DOMContentLoaded', function() {
-    // Corrigir URLs em elementos de vídeo
-    const mediaElements = document.querySelectorAll('video, audio, source');
-    mediaElements.forEach(element => {
-      if (element.src && element.src.includes(BASE_URL)) {
-        element.src = element.src.replace(BASE_URL, MASK_URL);
-      }
-    });
-    
-    // Corrigir URLs em iframes
-    const iframes = document.querySelectorAll('iframe');
-    iframes.forEach(iframe => {
-      if (iframe.src && iframe.src.includes(BASE_URL)) {
-        iframe.src = iframe.src.replace(BASE_URL, MASK_URL);
-      }
-    });
-    
-    // Corrigir formulários
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-      if (form.action && form.action.includes(BASE_URL)) {
-        form.action = form.action.replace(BASE_URL, MASK_URL);
-      }
-    });
-  });
-  
-  // Log para depuração
-  console.log('✅ Stream Pro Fix aplicado com sucesso!');
-})();
-  `);
+  console.log(`🔥 Servidor rodando na porta ${PORT}`);
 });
