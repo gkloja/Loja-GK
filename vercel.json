@@ -5,7 +5,8 @@
     { "source": "/index", "destination": "/index.html" },
     { "source": "/figurinhas", "destination": "/figurinhas.html" },
     { "source": "/downloads", "destination": "/downloads.html" },
-    { "source": "/comandos", "destination": "/comandos.html" }
+    { "source": "/comandos", "destination": "/comandos.html" },
+    { "source": "/ZapAudioMod", "destination": "/ZapAudioMod.html" }
   ],
   "headers": [
     {
@@ -23,7 +24,7 @@
       ]
     },
     {
-      "source": "/(figurinhas.html|downloads.html|comandos.html)",
+      "source": "/(figurinhas.html|downloads.html|comandos.html|ZapAudioMod.html)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
