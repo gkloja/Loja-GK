@@ -8386,6 +8386,13 @@ async function cfgCarregarConfigGrupo(grupoID) {
   }
 }
 
+/** Monta URL do worker proxy com query string correta (encodeURIComponent). */
+function apiProxyUrl(pathAndQuery) {
+  const origin = 'http://br2.bronxyshost.com:4009';
+  const p = pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
+  return 'https://orange-hill-2e61.gbscabral15.workers.dev/br2.bronxyshost.com:4009/proxy?url=' + encodeURIComponent(origin + p);
+}
+
 function cfgAuthBody() {
   try {
     const s = JSON.parse(localStorage.getItem("fabi_session") || "{}");
@@ -8880,7 +8887,7 @@ let fzChartDaily = null, fzChartWeekly = null;
 
 async function carregarHorarioGrupo(grupoID) {
     try {
-        const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + `/obterHorarioGrupo?grupoID=${encodeURIComponent(grupoID)}`);
+        const resp = await fetch((typeof apiProxyUrl === 'function' ? apiProxyUrl('/obterHorarioGrupo?grupoID=' + encodeURIComponent(grupoID)) : ((typeof API_URL !== 'undefined' ? API_URL : '') + '/obterHorarioGrupo?grupoID=' + encodeURIComponent(grupoID))));
         const data = await resp.json();
         
         if (data.success && data.horario) {
@@ -8932,7 +8939,7 @@ function iniciarAtualizacaoStatus() {
         const grupoID = cfgPainelObterGrupoSelecionado();
         if (grupoID) {
             try {
-                const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + `/obterHorarioGrupo?grupoID=${encodeURIComponent(grupoID)}`);
+                const resp = await fetch((typeof apiProxyUrl === 'function' ? apiProxyUrl('/obterHorarioGrupo?grupoID=' + encodeURIComponent(grupoID)) : ((typeof API_URL !== 'undefined' ? API_URL : '') + '/obterHorarioGrupo?grupoID=' + encodeURIComponent(grupoID))));
                 const data = await resp.json();
                 if (data.success) {
                     atualizarStatusHorario(data.horario);
@@ -8984,7 +8991,7 @@ async function salvarHorarioGrupo() {
 
     try {
         const auth = (typeof cfgAuthBody === 'function') ? cfgAuthBody() : {};
-        const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + '/alterarHorarioGrupo', {
+        const resp = await fetch((typeof apiProxyUrl === 'function' ? apiProxyUrl('/alterarHorarioGrupo') : ((typeof API_URL !== 'undefined' ? API_URL : '') + '/alterarHorarioGrupo')), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
