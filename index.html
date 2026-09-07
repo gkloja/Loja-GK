@@ -8414,7 +8414,11 @@ async function cfgSalvarTodas() {
   try {
     const resp = await fetch(API_URL + "/alterarConfig", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Numero": body.contaNumero || "",
+        "X-User-Nome": body.nome || body.nomeConta || ""
+      },
       body: JSON.stringify(body)
     });
     const data = await resp.json();
@@ -8687,10 +8691,15 @@ async function g1SalvarEstados() {
     }
 
     try {
+        const auth = (typeof cfgAuthBody === 'function') ? cfgAuthBody() : {};
         const resp = await fetch(API_URL + '/alterarEstadosG1', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ grupoID, estados: selecionados.length ? selecionados : 'nenhum' })
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Numero': auth.contaNumero || '',
+                'X-User-Nome': auth.nome || auth.nomeConta || ''
+            },
+            body: JSON.stringify({ grupoID, estados: selecionados.length ? selecionados : 'nenhum', ...auth })
         });
         const data = await resp.json();
 
@@ -8871,7 +8880,7 @@ let fzChartDaily = null, fzChartWeekly = null;
 
 async function carregarHorarioGrupo(grupoID) {
     try {
-        const resp = await fetch(`/obterHorarioGrupo?grupoID=${grupoID}`);
+        const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + `/obterHorarioGrupo?grupoID=${encodeURIComponent(grupoID)}`);
         const data = await resp.json();
         
         if (data.success && data.horario) {
@@ -8923,7 +8932,7 @@ function iniciarAtualizacaoStatus() {
         const grupoID = cfgPainelObterGrupoSelecionado();
         if (grupoID) {
             try {
-                const resp = await fetch(`/obterHorarioGrupo?grupoID=${grupoID}`);
+                const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + `/obterHorarioGrupo?grupoID=${encodeURIComponent(grupoID)}`);
                 const data = await resp.json();
                 if (data.success) {
                     atualizarStatusHorario(data.horario);
@@ -8974,14 +8983,20 @@ async function salvarHorarioGrupo() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
     try {
-        const resp = await fetch('/alterarHorarioGrupo', {
+        const auth = (typeof cfgAuthBody === 'function') ? cfgAuthBody() : {};
+        const resp = await fetch((typeof API_URL !== 'undefined' ? API_URL : '') + '/alterarHorarioGrupo', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Numero': auth.contaNumero || '',
+                'X-User-Nome': auth.nome || auth.nomeConta || ''
+            },
             body: JSON.stringify({ 
                 grupoID, 
                 ativo, 
                 horarioFechar: horarioFechar || null, 
-                horarioAbrir: horarioAbrir || null 
+                horarioAbrir: horarioAbrir || null,
+                ...auth
             })
         });
         
